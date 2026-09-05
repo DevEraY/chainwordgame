@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kelime Zinciri</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
+  background:radial-gradient(circle at top,#25345d 0,#11182d 45%,#080c18 100%);
+  color:#fff; overflow:hidden;
+}
+.card{
+  width:min(720px,92vw); padding:38px; border:1px solid rgba(255,255,255,.12);
+  border-radius:28px; background:rgba(15,21,40,.82); backdrop-filter:blur(18px);
+  box-shadow:0 25px 80px rgba(0,0,0,.35); text-align:center;
+}
+h1{font-size:42px;margin:0 0 8px}
+.sub{color:#aeb8d4;margin-bottom:28px}
+#game{display:none}
+.stats{display:flex;justify-content:space-between;gap:12px;margin-bottom:28px}
+.stat{flex:1;padding:12px;border-radius:16px;background:rgba(255,255,255,.06)}
+.stat b{display:block;font-size:24px;margin-top:3px}
+.letter{
+  font-size:82px;font-weight:800; display:inline-block; min-width:110px;
+  border-bottom:5px solid #8ea7ff; line-height:1.05; margin:8px 0 22px;
+  text-transform:lowercase;
+}
+input{
+  width:100%; padding:19px 20px; border-radius:17px; border:2px solid transparent;
+  background:#0a1020;color:white;font-size:25px;text-align:center;outline:none;
+  transition:.2s;
+}
+input:focus{border-color:#7f98ff;box-shadow:0 0 30px rgba(127,152,255,.15)}
+button{
+  border:0;border-radius:16px;padding:16px 30px;font-size:18px;font-weight:700;
+  cursor:pointer;color:#0b1020;background:#9fb2ff;transition:.18s;
+}
+button:hover{transform:translateY(-2px);filter:brightness(1.08)}
+#start{margin-top:10px}
+#message{height:30px;margin-top:15px;font-weight:700}
+.good{color:#7dffb2}.bad{color:#ff7e91}
+.pop{animation:pop .28s ease}.shake{animation:shake .3s ease}
+@keyframes pop{0%{transform:scale(.75);opacity:.2}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-9px)}75%{transform:translateX(9px)}}
+.char{display:inline-block;animation:charIn .16s ease}
+@keyframes charIn{from{transform:translateY(12px) scale(.5);opacity:0}to{transform:none;opacity:1}}
+#history{margin-top:18px;color:#8f9ab8;font-size:14px;min-height:22px}
+#end{display:none}
+.bigscore{font-size:64px;font-weight:800;margin:12px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="home">
+    <h1>Kelime Zinciri</h1>
+    <div class="sub">60 saniyede zinciri olabildiğince uzat!</div>
+    <button id="start">OYUNA BAŞLA</button>
+  </div>
+
+  <div id="game">
+    <div class="stats">
+      <div class="stat">Süre<b id="time">60</b></div>
+      <div class="stat">Puan<b id="score">0</b></div>
+      <div class="stat">Kelime<b id="count">0</b></div>
+    </div>
+    <div id="letter" class="letter">A</div>
+    <input id="word" autocomplete="off" autocapitalize="none" spellcheck="false"
+           placeholder="Kelimeyi yaz ve Enter'a bas">
+    <div id="message"></div>
+    <div id="history"></div>
+  </div>
+
+  <div id="end">
+    <h1>Süre Bitti!</h1>
+    <div class="bigscore" id="finalScore">0</div>
+    <div class="sub" id="finalText"></div>
+    <button onclick="location.reload()">TEKRAR OYNA</button>
+  </div>
+</div>
+
+<script>
+const letters = "abcçdefgğhıijklmnoöprsştuüvyz";
+const wordInput = document.getElementById("word");
+const letterEl = document.getElementById("letter");
+let currentLetter="", score=0, count=0, seconds=60, timer=null, used=new Set();
+
+function randomLetter(){
+  return letters[Math.floor(Math.random()*letters.length)];
+}
+function normalize(s){
+  return s.toLocaleLowerCase("tr-TR").trim()
+    .replace(/[^a-zçğıöşü]/g,"");
+}
+function nextRequired(word){
+  let last = word.at(-1);
+  // Türkçede ğ ile biten kelimelerde bir önceki harf kullanılır.
+  if(last==="ğ" && word.length>1) return word.at(-2);
+  return last;
+}
+function animateLetter(){
+  letterEl.classList.remove("pop"); void letterEl.offsetWidth;
+  letterEl.classList.add("pop");
+}
+function setRequired(c){
+  currentLetter=c;
+  letterEl.textContent=c;
+  animateLetter();
+}
+function showMessage(text, ok){
+  const m=document.getElementById("message");
+  m.textContent=text; m.className=ok?"good":"bad";
+}
+function endGame(){
+  clearInterval(timer);
+  wordInput.disabled=true;
+  document.getElementById("game").style.display="none";
+  document.getElementById("end").style.display="block";
+  document.getElementById("finalScore").textContent=score+" PUAN";
+  document.getElementById("finalText").textContent=
+    count+" geçerli kelime yazdın.";
+}
+document.getElementById("start").onclick=()=>{
+  document.getElementById("home").style.display="none";
+  document.getElementById("game").style.display="block";
+  setRequired(randomLetter());
+  wordInput.focus();
+  timer=setInterval(()=>{
+    seconds--;
+    document.getElementById("time").textContent=seconds;
+    if(seconds<=0) endGame();
+  },1000);
+};
+
+wordInput.addEventListener("keydown", async e => {
+  if (e.key !== "Enter" || !wordInput.value.trim()) return;
+
+  e.preventDefault();
+
+  const raw = wordInput.value;
+  const word = normalize(raw);
+
+  if (word.length < 2) {
+
+    score--;
+    showMessage("Kelime çok kısa! −1", false);
+
+  } else if (word[0] !== currentLetter) {
+
+    score--;
+    showMessage(
+      "Kelime " + currentLetter.toUpperCase() + " harfiyle başlamalı! −1",
+      false
+    );
+
+    wordInput.classList.add("shake");
+
+    setTimeout(() => {
+      wordInput.classList.remove("shake");
+    }, 300);
+
+  } else if (used.has(word)) {
+
+    score--;
+    showMessage("Bu kelimeyi zaten kullandın! −1", false);
+
+  } else {
+
+    // TDK sözlüğünde kelimeyi kontrol et
+    let isWord = false;
+
+    try {
+
+      const response = await fetch(
+        "https://sozluk.gov.tr/gts?ara=" + encodeURIComponent(word)
+      );
+
+      if (response.ok) {
+
+        const data = await response.json();
+
+        isWord =
+          Array.isArray(data) &&
+          data.length > 0 &&
+          !data[0].error;
+      }
+
+    } catch (error) {
+
+      console.error("Sözlük kontrolü başarısız:", error);
+      isWord = false;
+    }
+
+    if (!isWord) {
+
+      score--;
+
+      showMessage(
+        '"' + word + '" Türkçede bulunamadı! −1',
+        false
+      );
+
+      wordInput.classList.add("shake");
+
+      setTimeout(() => {
+        wordInput.classList.remove("shake");
+      }, 300);
+
+    } else {
+
+      // Kelime geçerli
+      used.add(word);
+
+      score += 5;
+      count++;
+
+      showMessage("+5 ✓", true);
+
+      const shown =
+        word.length > 18
+          ? word.slice(0, 18) + "…"
+          : word;
+
+      document.getElementById("history").textContent =
+        "Son: " + shown;
+
+      // Bir sonraki harfi belirle
+      setRequired(nextRequired(word));
+    }
+  }
+
+  document.getElementById("score").textContent = score;
+  document.getElementById("count").textContent = count;
+
+  wordInput.value = "";
+  wordInput.focus();
+});
+</script>
+</body>
+</html>
